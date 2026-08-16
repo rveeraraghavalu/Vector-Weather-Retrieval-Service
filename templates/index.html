@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Massive Stock Watchlist</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --card-bg: #ffffff;
+      --border: #e4e7ee;
+      --text: #1f2430;
+      --muted: #6b7280;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --radius: 10px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      max-width: 640px;
+      margin: 48px auto;
+      padding: 0 20px;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-top: 24px;
+      box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+    }
+
+    label {
+      display: block;
+      margin-top: 16px;
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    label:first-child { margin-top: 0; }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.15s ease;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+    }
+
+    button {
+      margin-top: 18px;
+      padding: 10px 18px;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.15s ease;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:active { transform: translateY(1px); }
+
+    #result {
+      margin-top: 16px;
+      white-space: pre-wrap;
+      background: #f6f6f6;
+      padding: 12px 14px;
+      border-radius: 8px;
+      min-height: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    #result:empty { display: none; }
+
+    table {
+      width: 100%;
+      margin-top: 0;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    th {
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-weight: 600;
+    }
+    tbody tr:hover { background: #fafbfe; }
+    tbody tr:last-child td { border-bottom: none; }
+
+    .empty-row td {
+      color: var(--muted);
+      text-align: center;
+      padding: 20px 8px;
+    }
+
+    .delete-btn {
+      margin-top: 0;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+    .delete-btn:hover { background: var(--danger); color: #fff; }
+    .delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .result-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: #fafbfe;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .result-card:hover { background: #f0f2f8; border-color: var(--accent); }
+    .result-card.expanded { background: var(--card-bg); }
+    
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .result-title {
+      font-weight: 600;
+      font-size: 14px;
+      flex: 1;
+      color: var(--text);
+    }
+    .result-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .result-similarity {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      white-space: nowrap;
+    }
+    .result-details {
+      display: none;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .result-card.expanded .result-details { display: block; }
+    .result-details p { margin: 8px 0; }
+    .result-details strong { color: var(--text); }
+    .result-link {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .result-link:hover { text-decoration: underline; }
+    .chunk-text {
+      background: #f6f6f6;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 8px;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Stock Watchlist</h1>
+  <p class="hint">Enter a single ticker symbol. This sends exactly ONE call to the Massive API to fetch the latest price, then adds it to your watchlist.</p>
+
+  <div class="card">
+    <form id="stock-form">
+      <label for="symbol">Ticker symbol</label>
+      <input type="text" id="symbol" name="symbol" placeholder="AAPL" required>
+      <button type="submit">Add to watchlist</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Search News (Vector Similarity)</h2>
+    <p class="hint" style="margin-top: 0;">Enter a natural language query to find the most relevant news articles across all tickers using semantic search.</p>
+    <form id="search-form">
+      <label for="query">Search query</label>
+      <input type="text" id="query" name="query" placeholder="earnings report, product launches, market trends..." required>
+      <label for="limit">Number of results</label>
+      <input type="text" id="limit" name="limit" value="10" placeholder="10">
+      <button type="submit">Search News</button>
+    </form>
+
+    <div id="search-result"></div>
+
+    <div id="search-results-container" style="display: none; margin-top: 20px;">
+      <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Document Results (Title + Description)</h3>
+      <p class="hint" style="margin-top: 0; margin-bottom: 12px;">Click any result to expand and see full details</p>
+      <div id="search-results-body"></div>
+    </div>
+
+    <div id="chunk-results-container" style="display: none; margin-top: 20px;">
+      <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Chunk Results (Article Content)</h3>
+      <p class="hint" style="margin-top: 0; margin-bottom: 12px;">Click any result to expand and see full content</p>
+      <div id="chunk-results-body"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Your Watchlist</h2>
+    <table id="watchlist-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Email</th>
+          <th>Latest price</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="watchlist-body"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const form = document.getElementById("stock-form");
+    const resultEl = document.getElementById("result");
+    const watchlistBody = document.getElementById("watchlist-body");
+
+    async function loadWatchlist() {
+      try {
+        const resp = await fetch("/watchlist");
+        const data = await resp.json();
+        if (!resp.ok) {
+          resultEl.textContent = "Error loading watchlist: " + (data.error || resp.statusText);
+          return;
+        }
+        watchlistBody.innerHTML = "";
+
+        if (!data.length) {
+          const emptyTr = document.createElement("tr");
+          emptyTr.className = "empty-row";
+          emptyTr.innerHTML = `<td colspan="5">Your watchlist is empty. Add a ticker above to get started.</td>`;
+          watchlistBody.appendChild(emptyTr);
+          return;
+        }
+
+        data.forEach((row) => {
+          const tr = document.createElement("tr");
+          const price = row.latest_price !== null && row.latest_price !== undefined
+            ? Number(row.latest_price).toFixed(2)
+            : "-";
+          const updated = row.updated_at ? new Date(row.updated_at).toLocaleString() : "-";
+          tr.innerHTML = `
+            <td>${row.symbol}</td>
+            <td>${row.email || "-"}</td>
+            <td>${price}</td>
+            <td>${updated}</td>
+            <td><button type="button" class="delete-btn" data-symbol="${row.symbol}">Remove</button></td>
+          `;
+          watchlistBody.appendChild(tr);
+        });
+      } catch (err) {
+        resultEl.textContent = "Failed to load watchlist: " + err;
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const symbol = document.getElementById("symbol").value;
+      resultEl.textContent = "Adding to watchlist...";
+
+      try {
+        const resp = await fetch("/watchlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          resultEl.textContent = "Error: " + (data.error || resp.statusText);
+          return;
+        }
+        resultEl.textContent = "Added " + data.symbol + " at price " + data.latest_price;
+        document.getElementById("symbol").value = "";
+        loadWatchlist();
+      } catch (err) {
+        resultEl.textContent = "Request failed: " + err;
+      }
+    });
+
+    watchlistBody.addEventListener("click", async (e) => {
+      const btn = e.target.closest(".delete-btn");
+      if (!btn) return;
+
+      const symbol = btn.dataset.symbol;
+      btn.disabled = true;
+      resultEl.textContent = "Removing " + symbol + "...";
+
+      try {
+        const resp = await fetch(`/watchlist/${encodeURIComponent(symbol)}`, {
+          method: "DELETE",
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          resultEl.textContent = "Error: " + (data.error || resp.statusText);
+          btn.disabled = false;
+          return;
+        }
+        resultEl.textContent = "Removed " + data.symbol + " from your watchlist.";
+        loadWatchlist();
+      } catch (err) {
+        resultEl.textContent = "Request failed: " + err;
+        btn.disabled = false;
+      }
+    });
+
+    // Vector search form handler
+    const searchForm = document.getElementById("search-form");
+    const searchResultEl = document.getElementById("search-result");
+    const searchResultsContainer = document.getElementById("search-results-container");
+    const searchResultsBody = document.getElementById("search-results-body");
+    const chunkResultsContainer = document.getElementById("chunk-results-container");
+    const chunkResultsBody = document.getElementById("chunk-results-body");
+
+    searchForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = document.getElementById("query").value;
+      const limit = parseInt(document.getElementById("limit").value) || 10;
+      
+      searchResultEl.textContent = "Searching...";
+      searchResultsContainer.style.display = "none";
+      chunkResultsContainer.style.display = "none";
+
+      try {
+        const resp = await fetch("/news/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, limit }),
+        });
+        const data = await resp.json();
+        
+        if (!resp.ok) {
+          searchResultEl.textContent = "Error: " + (data.error || resp.statusText);
+          return;
+        }
+
+        searchResultEl.textContent = `Found ${data.document_count} documents and ${data.chunk_count} chunks for "${data.query}"`;
+        
+        // Render document results as expandable cards
+        searchResultsBody.innerHTML = "";
+        if (!data.documents || data.documents.length === 0) {
+          searchResultsBody.innerHTML = `<p class="hint">No document results found.</p>`;
+        } else {
+          data.documents.forEach((result) => {
+            const card = document.createElement("div");
+            card.className = "result-card";
+            const published = result.published_utc ? new Date(result.published_utc).toLocaleDateString() : "Unknown date";
+            const similarity = (1 - result.distance).toFixed(3);
+            const publisher = result.publisher_name || "Unknown";
+            const author = result.author || "Unknown";
+            const sentiment = result.sentiment || "N/A";
+            const keywords = result.keywords || "N/A";
+            
+            card.innerHTML = `
+              <div class="result-header">
+                <div style="flex: 1;">
+                  <div class="result-title">${result.title}</div>
+                  <div class="result-meta">
+                    <strong>${result.ticker}</strong> • ${published} • ${publisher}
+                  </div>
+                </div>
+                <div class="result-similarity">${(similarity * 100).toFixed(0)}%</div>
+              </div>
+              <div class="result-details">
+                <p><strong>Description:</strong><br>${result.description || 'No description available'}</p>
+                <p><strong>Author:</strong> ${author}</p>
+                <p><strong>Sentiment:</strong> ${sentiment}</p>
+                <p><strong>Keywords:</strong> ${keywords}</p>
+                ${result.article_url ? `<a href="${result.article_url}" target="_blank" class="result-link">Read Full Article →</a>` : ''}
+              </div>
+            `;
+            
+            card.addEventListener('click', (e) => {
+              if (e.target.tagName !== 'A') {
+                card.classList.toggle('expanded');
+              }
+            });
+            
+            searchResultsBody.appendChild(card);
+          });
+        }
+        searchResultsContainer.style.display = "block";
+
+        // Render chunk results as expandable cards
+        chunkResultsBody.innerHTML = "";
+        if (!data.chunks || data.chunks.length === 0) {
+          chunkResultsBody.innerHTML = `<p class="hint">No chunk results found.</p>`;
+        } else {
+          data.chunks.forEach((result) => {
+            const card = document.createElement("div");
+            card.className = "result-card";
+            const similarity = (1 - result.distance).toFixed(3);
+            const published = result.published_utc ? new Date(result.published_utc).toLocaleDateString() : "Unknown date";
+            const publisher = result.publisher_name || "Unknown";
+            const preview = result.chunk_text.length > 120 
+              ? result.chunk_text.substring(0, 120) + "..." 
+              : result.chunk_text;
+            
+            card.innerHTML = `
+              <div class="result-header">
+                <div style="flex: 1;">
+                  <div class="result-title">${result.title || 'Article Chunk ' + result.chunk_index}</div>
+                  <div class="result-meta">
+                    <strong>${result.ticker}</strong> • Chunk #${result.chunk_index} • ${published} • ${publisher}
+                  </div>
+                  <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">${preview}</div>
+                </div>
+                <div class="result-similarity">${(similarity * 100).toFixed(0)}%</div>
+              </div>
+              <div class="result-details">
+                <p><strong>Full Content:</strong></p>
+                <div class="chunk-text">${result.chunk_text}</div>
+                ${result.article_url ? `<a href="${result.article_url}" target="_blank" class="result-link">Read Full Article →</a>` : ''}
+              </div>
+            `;
+            
+            card.addEventListener('click', (e) => {
+              if (e.target.tagName !== 'A') {
+                card.classList.toggle('expanded');
+              }
+            });
+            
+            chunkResultsBody.appendChild(card);
+          });
+        }
+        chunkResultsContainer.style.display = "block";
+
+      } catch (err) {
+        searchResultEl.textContent = "Request failed: " + err;
+      }
+    });
+
+    loadWatchlist();
+  </script>
+</body>
+</html>
