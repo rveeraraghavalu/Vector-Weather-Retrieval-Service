@@ -2,36 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Massive Stock Watchlist</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Intelligence - AI-Powered Semantic Search</title>
   <style>
     :root {
-      --bg: #f4f6fb;
+      --sky-blue: #0ea5e9;
+      --sky-light: #7dd3fc;
+      --sky-dark: #0369a1;
+      --cloud: #f0f9ff;
+      --storm: #6366f1;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --success: #10b981;
+      --text: #0f172a;
+      --text-light: #475569;
+      --muted: #94a3b8;
       --card-bg: #ffffff;
-      --border: #e4e7ee;
-      --text: #1f2430;
-      --muted: #6b7280;
-      --accent: #4f46e5;
-      --accent-hover: #4338ca;
-      --danger: #dc2626;
-      --danger-hover: #b91c1c;
-      --radius: 10px;
+      --border: #e2e8f0;
+      --radius: 16px;
+      --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.15);
     }
 
     * { box-sizing: border-box; }
 
     body {
       font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-      max-width: 640px;
+      max-width: 900px;
       margin: 48px auto;
       padding: 0 20px;
       color: var(--text);
-      background: var(--bg);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
     }
 
     h1 {
-      font-size: 24px;
+      font-size: 32px;
       font-weight: 700;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
+      color: #fff;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      color: rgba(255,255,255,0.9);
+      font-size: 16px;
+      margin-top: 8px;
+      margin-bottom: 24px;
     }
 
     .hint {
@@ -47,7 +64,7 @@
       border-radius: var(--radius);
       padding: 24px;
       margin-top: 24px;
-      box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+      box-shadow: var(--shadow);
     }
 
     label {
@@ -59,7 +76,7 @@
     }
     label:first-child { margin-top: 0; }
 
-    input[type="text"] {
+    input[type="text"], input[type="number"], select {
       width: 100%;
       padding: 10px 12px;
       margin-top: 6px;
@@ -68,10 +85,10 @@
       font-size: 14px;
       transition: border-color 0.15s ease;
     }
-    input[type="text"]:focus {
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
       outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+      border-color: var(--sky-blue);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12);
     }
 
     button {
@@ -80,65 +97,34 @@
       cursor: pointer;
       border: none;
       border-radius: 8px;
-      background: var(--accent);
+      background: var(--sky-blue);
       color: #fff;
       font-size: 14px;
       font-weight: 600;
-      transition: background 0.15s ease;
+      transition: all 0.15s ease;
     }
-    button:hover { background: var(--accent-hover); }
+    button:hover { background: var(--sky-dark); }
     button:active { transform: translateY(1px); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    #result {
+    .btn-secondary {
+      background: var(--muted);
+    }
+    .btn-secondary:hover { background: var(--text-light); }
+
+    #result, #forecast-result, #alert-result, #search-result {
       margin-top: 16px;
       white-space: pre-wrap;
-      background: #f6f6f6;
+      background: var(--cloud);
       padding: 12px 14px;
       border-radius: 8px;
       min-height: 20px;
       font-size: 13px;
-      color: var(--muted);
+      color: var(--text);
     }
-    #result:empty { display: none; }
-
-    table {
-      width: 100%;
-      margin-top: 0;
-      border-collapse: collapse;
+    #result:empty, #forecast-result:empty, #alert-result:empty, #search-result:empty {
+      display: none;
     }
-    th, td {
-      text-align: left;
-      padding: 10px 8px;
-      border-bottom: 1px solid var(--border);
-      font-size: 14px;
-    }
-    th {
-      font-size: 12px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      font-weight: 600;
-    }
-    tbody tr:hover { background: #fafbfe; }
-    tbody tr:last-child td { border-bottom: none; }
-
-    .empty-row td {
-      color: var(--muted);
-      text-align: center;
-      padding: 20px 8px;
-    }
-
-    .delete-btn {
-      margin-top: 0;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      background: transparent;
-      color: var(--danger);
-      border: 1px solid var(--danger);
-    }
-    .delete-btn:hover { background: var(--danger); color: #fff; }
-    .delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .result-card {
       border: 1px solid var(--border);
@@ -149,8 +135,8 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    .result-card:hover { background: #f0f2f8; border-color: var(--accent); }
-    .result-card.expanded { background: var(--card-bg); }
+    .result-card:hover { background: var(--cloud); border-color: var(--sky-blue); }
+    .result-card.expanded { background: var(--card-bg); box-shadow: var(--shadow); }
     
     .result-header {
       display: flex;
@@ -172,7 +158,7 @@
     .result-similarity {
       font-size: 13px;
       font-weight: 600;
-      color: var(--accent);
+      color: var(--sky-blue);
       white-space: nowrap;
     }
     .result-details {
@@ -186,181 +172,452 @@
     .result-card.expanded .result-details { display: block; }
     .result-details p { margin: 8px 0; }
     .result-details strong { color: var(--text); }
-    .result-link {
-      display: inline-block;
-      margin-top: 8px;
-      color: var(--accent);
-      text-decoration: none;
-      font-weight: 600;
+
+    .forecast-period {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: var(--card-bg);
     }
-    .result-link:hover { text-decoration: underline; }
-    .chunk-text {
-      background: #f6f6f6;
-      padding: 12px;
-      border-radius: 6px;
+    .forecast-name {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .forecast-temp {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--sky-blue);
+      margin-bottom: 8px;
+    }
+    .forecast-short {
+      color: var(--text-light);
+      margin-bottom: 8px;
+    }
+    .forecast-detailed {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+
+    .alert-card {
+      border-left: 4px solid var(--danger);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: #fef2f2;
+    }
+    .alert-event {
+      font-weight: 700;
+      font-size: 16px;
+      color: var(--danger);
+      margin-bottom: 8px;
+    }
+    .alert-headline {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+    .alert-description {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-light);
       margin-top: 8px;
-      white-space: pre-wrap;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
+    }
+
+    .location-select {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .location-btn {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      margin: 0;
+    }
+    .location-btn:hover { 
+      border-color: var(--sky-blue); 
+      background: var(--cloud);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
+    }
+    .location-btn:active { transform: translateY(0); }
+
+    .city-search-wrapper {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .city-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 250px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .city-suggestions.active { display: block; }
+    .city-suggestion-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s ease;
+    }
+    .city-suggestion-item:last-child { border-bottom: none; }
+    .city-suggestion-item:hover { background: var(--cloud); }
+    .city-suggestion-item .city-name {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .city-suggestion-item .city-coords {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
     }
   </style>
 </head>
 <body>
-  <h1>Stock Watchlist</h1>
-  <p class="hint">Enter a single ticker symbol. This sends exactly ONE call to the Massive API to fetch the latest price, then adds it to your watchlist.</p>
+  <h1>⛅ Weather Intelligence</h1>
+  <p class="subtitle">AI-powered weather forecasts, alerts, and semantic search</p>
 
+  <!-- Sync Weather Data -->
   <div class="card">
-    <form id="stock-form">
-      <label for="symbol">Ticker symbol</label>
-      <input type="text" id="symbol" name="symbol" placeholder="AAPL" required>
-      <button type="submit">Add to watchlist</button>
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Sync Weather Data</h2>
+    <p class="hint" style="margin-top: 0;">Fetch the latest weather forecasts and alerts from the National Weather Service and store them for search.</p>
+    <form id="sync-form">
+      <button type="submit">Sync Weather Data</button>
     </form>
-
     <div id="result"></div>
   </div>
 
+  <!-- Get Forecast -->
   <div class="card">
-    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Search News (Vector Similarity)</h2>
-    <p class="hint" style="margin-top: 0;">Enter a natural language query to find the most relevant news articles across all tickers using semantic search.</p>
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Get Forecast</h2>
+    <p class="hint" style="margin-top: 0;">Search for a city, select from popular options, or enter coordinates manually.</p>
+    
+    <form id="forecast-form">
+      <label for="city-search">Search City (type to filter)</label>
+      <div class="city-search-wrapper">
+        <input type="text" id="city-search" placeholder="Type city name (e.g., Los Angeles, Miami, Denver)..." autocomplete="off">
+        <div id="city-suggestions" class="city-suggestions"></div>
+      </div>
+
+      <p class="hint" style="margin: 12px 0 8px 0;">Or select a popular city:</p>
+      <div class="location-select">
+        <button type="button" class="location-btn" data-lat="37.7749" data-lon="-122.4194" data-city="San Francisco, CA">San Francisco</button>
+        <button type="button" class="location-btn" data-lat="40.7128" data-lon="-74.0060" data-city="New York, NY">New York</button>
+        <button type="button" class="location-btn" data-lat="41.8781" data-lon="-87.6298" data-city="Chicago, IL">Chicago</button>
+        <button type="button" class="location-btn" data-lat="34.0522" data-lon="-118.2437" data-city="Los Angeles, CA">Los Angeles</button>
+        <button type="button" class="location-btn" data-lat="30.2672" data-lon="-97.7431" data-city="Austin, TX">Austin</button>
+        <button type="button" class="location-btn" data-lat="47.6062" data-lon="-122.3321" data-city="Seattle, WA">Seattle</button>
+      </div>
+
+      <label for="latitude" style="margin-top: 16px;">Latitude</label>
+      <input type="number" id="latitude" name="latitude" step="0.0001" placeholder="37.7749" required>
+      
+      <label for="longitude">Longitude</label>
+      <input type="number" id="longitude" name="longitude" step="0.0001" placeholder="-122.4194" required>
+      
+      <label for="forecast-type">Forecast Type</label>
+      <select id="forecast-type" name="hourly">
+        <option value="false">Daily Forecast</option>
+        <option value="true">Hourly Forecast</option>
+      </select>
+      
+      <button type="submit">Get Forecast</button>
+    </form>
+
+    <div id="forecast-result"></div>
+    <div id="forecast-container" style="display: none; margin-top: 20px;"></div>
+  </div>
+
+  <!-- Get Alerts -->
+  <div class="card">
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Active Weather Alerts</h2>
+    <p class="hint" style="margin-top: 0;">Get active weather alerts for a specific state or nationwide.</p>
+    <form id="alert-form">
+      <label for="state">State Code (optional, e.g., CA, TX, NY)</label>
+      <input type="text" id="state" name="state" placeholder="CA" maxlength="2">
+      
+      <button type="submit">Get Alerts</button>
+    </form>
+
+    <div id="alert-result"></div>
+    <div id="alert-container" style="display: none; margin-top: 20px;"></div>
+  </div>
+
+  <!-- Semantic Search -->
+  <div class="card">
+    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Semantic Search</h2>
+    <p class="hint" style="margin-top: 0;">Search through weather documents using natural language. Try "severe thunderstorm warnings" or "sunny weekend forecast".</p>
     <form id="search-form">
       <label for="query">Search query</label>
-      <input type="text" id="query" name="query" placeholder="earnings report, product launches, market trends..." required>
+      <input type="text" id="query" name="query" placeholder="severe thunderstorm warning, sunny and warm..." required>
+      
       <label for="limit">Number of results</label>
-      <input type="text" id="limit" name="limit" value="10" placeholder="10">
-      <button type="submit">Search News</button>
+      <input type="number" id="limit" name="limit" value="10" min="1" max="50">
+      
+      <button type="submit">Search</button>
     </form>
 
     <div id="search-result"></div>
-
-    <div id="search-results-container" style="display: none; margin-top: 20px;">
-      <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Document Results (Title + Description)</h3>
-      <p class="hint" style="margin-top: 0; margin-bottom: 12px;">Click any result to expand and see full details</p>
-      <div id="search-results-body"></div>
-    </div>
-
-    <div id="chunk-results-container" style="display: none; margin-top: 20px;">
-      <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">Chunk Results (Article Content)</h3>
-      <p class="hint" style="margin-top: 0; margin-bottom: 12px;">Click any result to expand and see full content</p>
-      <div id="chunk-results-body"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Your Watchlist</h2>
-    <table id="watchlist-table">
-      <thead>
-        <tr>
-          <th>Symbol</th>
-          <th>Email</th>
-          <th>Latest price</th>
-          <th>Updated</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="watchlist-body"></tbody>
-    </table>
+    <div id="search-results-container" style="display: none; margin-top: 20px;"></div>
   </div>
 
   <script>
-    const form = document.getElementById("stock-form");
-    const resultEl = document.getElementById("result");
-    const watchlistBody = document.getElementById("watchlist-body");
+    // US Cities Database (expanded list)
+    const CITIES = [
+      { name: "San Francisco, CA", lat: 37.7749, lon: -122.4194 },
+      { name: "New York, NY", lat: 40.7128, lon: -74.0060 },
+      { name: "Chicago, IL", lat: 41.8781, lon: -87.6298 },
+      { name: "Los Angeles, CA", lat: 34.0522, lon: -118.2437 },
+      { name: "Austin, TX", lat: 30.2672, lon: -97.7431 },
+      { name: "Seattle, WA", lat: 47.6062, lon: -122.3321 },
+      { name: "Boston, MA", lat: 42.3601, lon: -71.0589 },
+      { name: "Miami, FL", lat: 25.7617, lon: -80.1918 },
+      { name: "Denver, CO", lat: 39.7392, lon: -104.9903 },
+      { name: "Atlanta, GA", lat: 33.7490, lon: -84.3880 },
+      { name: "Phoenix, AZ", lat: 33.4484, lon: -112.0740 },
+      { name: "Portland, OR", lat: 45.5152, lon: -122.6784 },
+      { name: "Las Vegas, NV", lat: 36.1699, lon: -115.1398 },
+      { name: "San Diego, CA", lat: 32.7157, lon: -117.1611 },
+      { name: "Dallas, TX", lat: 32.7767, lon: -96.7970 },
+      { name: "Houston, TX", lat: 29.7604, lon: -95.3698 },
+      { name: "Philadelphia, PA", lat: 39.9526, lon: -75.1652 },
+      { name: "Minneapolis, MN", lat: 44.9778, lon: -93.2650 },
+      { name: "Nashville, TN", lat: 36.1627, lon: -86.7816 },
+      { name: "Detroit, MI", lat: 42.3314, lon: -83.0458 },
+      { name: "Salt Lake City, UT", lat: 40.7608, lon: -111.8910 },
+      { name: "Kansas City, MO", lat: 39.0997, lon: -94.5786 },
+      { name: "New Orleans, LA", lat: 29.9511, lon: -90.0715 },
+      { name: "Charlotte, NC", lat: 35.2271, lon: -80.8431 },
+      { name: "Indianapolis, IN", lat: 39.7684, lon: -86.1581 },
+      { name: "Columbus, OH", lat: 39.9612, lon: -82.9988 },
+      { name: "Milwaukee, WI", lat: 43.0389, lon: -87.9065 },
+      { name: "Raleigh, NC", lat: 35.7796, lon: -78.6382 },
+      { name: "Tucson, AZ", lat: 32.2226, lon: -110.9747 },
+      { name: "Albuquerque, NM", lat: 35.0844, lon: -106.6504 },
+      { name: "Sacramento, CA", lat: 38.5816, lon: -121.4944 },
+      { name: "Honolulu, HI", lat: 21.3099, lon: -157.8581 },
+      { name: "Anchorage, AK", lat: 61.2181, lon: -149.9003 }
+    ];
 
-    async function loadWatchlist() {
+    // Sync form handler
+    const syncForm = document.getElementById("sync-form");
+    const resultEl = document.getElementById("result");
+
+    syncForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      resultEl.textContent = "Syncing weather data...";
+
       try {
-        const resp = await fetch("/watchlist");
+        const resp = await fetch("/weather/sync", { method: "POST" });
         const data = await resp.json();
         if (!resp.ok) {
-          resultEl.textContent = "Error loading watchlist: " + (data.error || resp.statusText);
+          resultEl.textContent = "Error: " + (data.error || resp.statusText);
           return;
         }
-        watchlistBody.innerHTML = "";
-
-        if (!data.length) {
-          const emptyTr = document.createElement("tr");
-          emptyTr.className = "empty-row";
-          emptyTr.innerHTML = `<td colspan="5">Your watchlist is empty. Add a ticker above to get started.</td>`;
-          watchlistBody.appendChild(emptyTr);
-          return;
-        }
-
-        data.forEach((row) => {
-          const tr = document.createElement("tr");
-          const price = row.latest_price !== null && row.latest_price !== undefined
-            ? Number(row.latest_price).toFixed(2)
-            : "-";
-          const updated = row.updated_at ? new Date(row.updated_at).toLocaleString() : "-";
-          tr.innerHTML = `
-            <td>${row.symbol}</td>
-            <td>${row.email || "-"}</td>
-            <td>${price}</td>
-            <td>${updated}</td>
-            <td><button type="button" class="delete-btn" data-symbol="${row.symbol}">Remove</button></td>
-          `;
-          watchlistBody.appendChild(tr);
-        });
+        resultEl.textContent = `Successfully synced ${data.synced} weather documents from ${data.locations} locations.`;
       } catch (err) {
-        resultEl.textContent = "Failed to load watchlist: " + err;
+        resultEl.textContent = "Request failed: " + err;
       }
+    });
+
+    // City search autocomplete
+    const citySearchInput = document.getElementById("city-search");
+    const citySuggestionsEl = document.getElementById("city-suggestions");
+    const latInput = document.getElementById("latitude");
+    const lonInput = document.getElementById("longitude");
+
+    function filterCities(searchText) {
+      if (!searchText) return [];
+      const lower = searchText.toLowerCase();
+      return CITIES.filter(city => 
+        city.name.toLowerCase().includes(lower)
+      ).slice(0, 8); // Show max 8 results
     }
 
-    form.addEventListener("submit", async (e) => {
+    function selectCity(city) {
+      citySearchInput.value = city.name;
+      latInput.value = city.lat;
+      lonInput.value = city.lon;
+      citySuggestionsEl.classList.remove('active');
+      citySuggestionsEl.innerHTML = '';
+    }
+
+    function renderCitySuggestions(cities) {
+      if (cities.length === 0) {
+        citySuggestionsEl.classList.remove('active');
+        citySuggestionsEl.innerHTML = '';
+        return;
+      }
+
+      citySuggestionsEl.innerHTML = cities.map(city => `
+        <div class="city-suggestion-item" data-lat="${city.lat}" data-lon="${city.lon}" data-name="${city.name}">
+          <div class="city-name">${city.name}</div>
+          <div class="city-coords">${city.lat.toFixed(4)}, ${city.lon.toFixed(4)}</div>
+        </div>
+      `).join('');
+      
+      citySuggestionsEl.classList.add('active');
+
+      // Add click handlers to suggestions
+      citySuggestionsEl.querySelectorAll('.city-suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+          selectCity({
+            name: item.dataset.name,
+            lat: parseFloat(item.dataset.lat),
+            lon: parseFloat(item.dataset.lon)
+          });
+        });
+      });
+    }
+
+    // City search input handler
+    citySearchInput.addEventListener('input', (e) => {
+      const searchText = e.target.value.trim();
+      const filtered = filterCities(searchText);
+      renderCitySuggestions(filtered);
+    });
+
+    // Close suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.city-search-wrapper')) {
+        citySuggestionsEl.classList.remove('active');
+      }
+    });
+
+    // Forecast form handler
+    const forecastForm = document.getElementById("forecast-form");
+    const forecastResultEl = document.getElementById("forecast-result");
+    const forecastContainer = document.getElementById("forecast-container");
+
+    // Location button handlers
+    document.querySelectorAll(".location-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        latInput.value = btn.dataset.lat;
+        lonInput.value = btn.dataset.lon;
+        if (btn.dataset.city) {
+          citySearchInput.value = btn.dataset.city;
+        }
+        citySuggestionsEl.classList.remove('active');
+      });
+    });
+
+    forecastForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const symbol = document.getElementById("symbol").value;
-      resultEl.textContent = "Adding to watchlist...";
+      const lat = document.getElementById("latitude").value;
+      const lon = document.getElementById("longitude").value;
+      const hourly = document.getElementById("forecast-type").value;
+      
+      forecastResultEl.textContent = "Fetching forecast...";
+      forecastContainer.style.display = "none";
 
       try {
-        const resp = await fetch("/watchlist", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbol }),
-        });
+        const resp = await fetch(`/weather/forecast?lat=${lat}&lon=${lon}&hourly=${hourly}`);
         const data = await resp.json();
+        
         if (!resp.ok) {
-          resultEl.textContent = "Error: " + (data.error || resp.statusText);
+          forecastResultEl.textContent = "Error: " + (data.error || resp.statusText);
           return;
         }
-        resultEl.textContent = "Added " + data.symbol + " at price " + data.latest_price;
-        document.getElementById("symbol").value = "";
-        loadWatchlist();
+
+        forecastResultEl.textContent = `Forecast for ${lat}, ${lon} (${data.forecast_type})`;
+        
+        // Render forecast periods
+        forecastContainer.innerHTML = "";
+        if (data.periods && data.periods.length > 0) {
+          data.periods.slice(0, 10).forEach(period => {
+            const periodDiv = document.createElement("div");
+            periodDiv.className = "forecast-period";
+            periodDiv.innerHTML = `
+              <div class="forecast-name">${period.name}</div>
+              <div class="forecast-temp">${period.temperature}°${period.temperatureUnit}</div>
+              <div class="forecast-short">${period.shortForecast}</div>
+              <div class="forecast-detailed">${period.detailedForecast}</div>
+            `;
+            forecastContainer.appendChild(periodDiv);
+          });
+        } else {
+          forecastContainer.innerHTML = `<p class="hint">No forecast data available.</p>`;
+        }
+        forecastContainer.style.display = "block";
+
       } catch (err) {
-        resultEl.textContent = "Request failed: " + err;
+        forecastResultEl.textContent = "Request failed: " + err;
       }
     });
 
-    watchlistBody.addEventListener("click", async (e) => {
-      const btn = e.target.closest(".delete-btn");
-      if (!btn) return;
+    // Alerts form handler
+    const alertForm = document.getElementById("alert-form");
+    const alertResultEl = document.getElementById("alert-result");
+    const alertContainer = document.getElementById("alert-container");
 
-      const symbol = btn.dataset.symbol;
-      btn.disabled = true;
-      resultEl.textContent = "Removing " + symbol + "...";
+    alertForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const state = document.getElementById("state").value;
+      
+      alertResultEl.textContent = "Fetching alerts...";
+      alertContainer.style.display = "none";
 
       try {
-        const resp = await fetch(`/watchlist/${encodeURIComponent(symbol)}`, {
-          method: "DELETE",
-        });
+        const url = state ? `/weather/alerts?state=${state.toUpperCase()}` : `/weather/alerts`;
+        const resp = await fetch(url);
         const data = await resp.json();
+        
         if (!resp.ok) {
-          resultEl.textContent = "Error: " + (data.error || resp.statusText);
-          btn.disabled = false;
+          alertResultEl.textContent = "Error: " + (data.error || resp.statusText);
           return;
         }
-        resultEl.textContent = "Removed " + data.symbol + " from your watchlist.";
-        loadWatchlist();
+
+        alertResultEl.textContent = `Found ${data.alert_count} active alert(s)${data.state ? ' for ' + data.state : ' nationwide'}`;
+        
+        // Render alerts
+        alertContainer.innerHTML = "";
+        if (data.alerts && data.alerts.length > 0) {
+          data.alerts.slice(0, 20).forEach(alert => {
+            const alertDiv = document.createElement("div");
+            alertDiv.className = "alert-card";
+            alertDiv.innerHTML = `
+              <div class="alert-event">${alert.event || 'Weather Alert'}</div>
+              <div class="alert-headline">${alert.headline || 'No headline'}</div>
+              <div class="alert-meta" style="font-size: 12px; color: var(--muted);">
+                ${alert.areaDesc || 'Unknown area'} • Effective: ${alert.effective ? new Date(alert.effective).toLocaleString() : 'N/A'}
+              </div>
+              <div class="alert-description">${(alert.description || 'No description available').substring(0, 500)}...</div>
+            `;
+            alertContainer.appendChild(alertDiv);
+          });
+        } else {
+          alertContainer.innerHTML = `<p class="hint">No active alerts found.</p>`;
+        }
+        alertContainer.style.display = "block";
+
       } catch (err) {
-        resultEl.textContent = "Request failed: " + err;
-        btn.disabled = false;
+        alertResultEl.textContent = "Request failed: " + err;
       }
     });
 
-    // Vector search form handler
+    // Search form handler
     const searchForm = document.getElementById("search-form");
     const searchResultEl = document.getElementById("search-result");
     const searchResultsContainer = document.getElementById("search-results-container");
-    const searchResultsBody = document.getElementById("search-results-body");
-    const chunkResultsContainer = document.getElementById("chunk-results-container");
-    const chunkResultsBody = document.getElementById("chunk-results-body");
 
     searchForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -369,10 +626,9 @@
       
       searchResultEl.textContent = "Searching...";
       searchResultsContainer.style.display = "none";
-      chunkResultsContainer.style.display = "none";
 
       try {
-        const resp = await fetch("/news/search", {
+        const resp = await fetch("/weather/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query, limit }),
@@ -384,103 +640,49 @@
           return;
         }
 
-        searchResultEl.textContent = `Found ${data.document_count} documents and ${data.chunk_count} chunks for "${data.query}"`;
+        searchResultEl.textContent = `Found ${data.document_count} result(s) for "${data.query}"`;
         
-        // Render document results as expandable cards
-        searchResultsBody.innerHTML = "";
+        // Render search results
+        searchResultsContainer.innerHTML = "";
         if (!data.documents || data.documents.length === 0) {
-          searchResultsBody.innerHTML = `<p class="hint">No document results found.</p>`;
+          searchResultsContainer.innerHTML = `<p class="hint">No results found. Try syncing weather data first.</p>`;
         } else {
           data.documents.forEach((result) => {
             const card = document.createElement("div");
             card.className = "result-card";
-            const published = result.published_utc ? new Date(result.published_utc).toLocaleDateString() : "Unknown date";
+            const issued = result.issued_at ? new Date(result.issued_at).toLocaleDateString() : "Unknown date";
             const similarity = (1 - result.distance).toFixed(3);
-            const publisher = result.publisher_name || "Unknown";
-            const author = result.author || "Unknown";
-            const sentiment = result.sentiment || "N/A";
-            const keywords = result.keywords || "N/A";
             
             card.innerHTML = `
               <div class="result-header">
                 <div style="flex: 1;">
-                  <div class="result-title">${result.title}</div>
+                  <div class="result-title">${result.headline || result.event || 'Weather Document'}</div>
                   <div class="result-meta">
-                    <strong>${result.ticker}</strong> • ${published} • ${publisher}
+                    <strong>${result.location}</strong> • ${result.source_type} • ${issued}
                   </div>
                 </div>
                 <div class="result-similarity">${(similarity * 100).toFixed(0)}%</div>
               </div>
               <div class="result-details">
-                <p><strong>Description:</strong><br>${result.description || 'No description available'}</p>
-                <p><strong>Author:</strong> ${author}</p>
-                <p><strong>Sentiment:</strong> ${sentiment}</p>
-                <p><strong>Keywords:</strong> ${keywords}</p>
-                ${result.article_url ? `<a href="${result.article_url}" target="_blank" class="result-link">Read Full Article →</a>` : ''}
+                <p><strong>Event:</strong> ${result.event || 'N/A'}</p>
+                <p><strong>Narrative:</strong><br>${result.narrative_text || 'No description available'}</p>
+                ${result.latitude && result.longitude ? `<p><strong>Coordinates:</strong> ${result.latitude}, ${result.longitude}</p>` : ''}
               </div>
             `;
             
-            card.addEventListener('click', (e) => {
-              if (e.target.tagName !== 'A') {
-                card.classList.toggle('expanded');
-              }
+            card.addEventListener('click', () => {
+              card.classList.toggle('expanded');
             });
             
-            searchResultsBody.appendChild(card);
+            searchResultsContainer.appendChild(card);
           });
         }
         searchResultsContainer.style.display = "block";
-
-        // Render chunk results as expandable cards
-        chunkResultsBody.innerHTML = "";
-        if (!data.chunks || data.chunks.length === 0) {
-          chunkResultsBody.innerHTML = `<p class="hint">No chunk results found.</p>`;
-        } else {
-          data.chunks.forEach((result) => {
-            const card = document.createElement("div");
-            card.className = "result-card";
-            const similarity = (1 - result.distance).toFixed(3);
-            const published = result.published_utc ? new Date(result.published_utc).toLocaleDateString() : "Unknown date";
-            const publisher = result.publisher_name || "Unknown";
-            const preview = result.chunk_text.length > 120 
-              ? result.chunk_text.substring(0, 120) + "..." 
-              : result.chunk_text;
-            
-            card.innerHTML = `
-              <div class="result-header">
-                <div style="flex: 1;">
-                  <div class="result-title">${result.title || 'Article Chunk ' + result.chunk_index}</div>
-                  <div class="result-meta">
-                    <strong>${result.ticker}</strong> • Chunk #${result.chunk_index} • ${published} • ${publisher}
-                  </div>
-                  <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">${preview}</div>
-                </div>
-                <div class="result-similarity">${(similarity * 100).toFixed(0)}%</div>
-              </div>
-              <div class="result-details">
-                <p><strong>Full Content:</strong></p>
-                <div class="chunk-text">${result.chunk_text}</div>
-                ${result.article_url ? `<a href="${result.article_url}" target="_blank" class="result-link">Read Full Article →</a>` : ''}
-              </div>
-            `;
-            
-            card.addEventListener('click', (e) => {
-              if (e.target.tagName !== 'A') {
-                card.classList.toggle('expanded');
-              }
-            });
-            
-            chunkResultsBody.appendChild(card);
-          });
-        }
-        chunkResultsContainer.style.display = "block";
 
       } catch (err) {
         searchResultEl.textContent = "Request failed: " + err;
       }
     });
-
-    loadWatchlist();
   </script>
 </body>
 </html>

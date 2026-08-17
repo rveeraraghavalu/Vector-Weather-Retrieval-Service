@@ -31,7 +31,12 @@ def _lakebase_url() -> str:
 @contextmanager
 def get_connection():
     """Yield a raw psycopg2 connection with a RealDictCursor factory."""
-    conn = psycopg2.connect(_lakebase_url(), cursor_factory=RealDictCursor)
+    # Connect with options that prevent automatic role switching
+    conn = psycopg2.connect(
+        _lakebase_url(),
+        cursor_factory=RealDictCursor,
+        options="-c search_path=public"  # Prevent role switching issues
+    )
     try:
         yield conn
     finally:

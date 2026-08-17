@@ -1,48 +1,44 @@
 """
-Databricks App boilerplate:
-- Serves a small Flask API
-- Reads/writes to Lakebase (Databricks-managed Postgres) via lakebase.py
-- Pulls data from the Massive API via massive_client.py and syncs it into Lakebase
+Weather Intelligence App:
+- Serves a Flask API for weather data
+- Fetches data from the National Weather Service API via weather_client.py
+- Stores weather documents in Lakebase (Databricks-managed Postgres)
+- Provides semantic search over weather forecasts and alerts using vector embeddings
 
 Run locally:
     python app.py
 Deploy as a Databricks App using app.yaml.
 """
 
+import json as _json
 import logging
 import os
-import re
 
 import requests
 from databricks.sdk import WorkspaceClient
 from flask import Flask, jsonify, render_template, request
 
 import lakebase
-from massive_client import MassiveClient
+from weather_client import WeatherClient
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("massive-app")
+logger = logging.getLogger("weather-app")
 
 app = Flask(__name__)
 _w = WorkspaceClient()
 
-TABLE_NAME = os.environ.get("MASSIVE_TABLE_NAME", "massive_records")
-WATCHLIST_TABLE_NAME = os.environ.get("WATCHLIST_TABLE_NAME", "watchlist")
-NEWS_TABLE_NAME = os.environ.get("NEWS_TABLE_NAME", "ticker_news_documents")
-EMBEDDINGS_TABLE_NAME = os.environ.get("EMBEDDINGS_TABLE_NAME", "ticker_news_embeddings")
-CHUNK_EMBEDDINGS_TABLE_NAME = os.environ.get("CHUNK_EMBEDDINGS_TABLE_NAME", "ticker_news_chunk_embeddings")
+# Weather document and embedding table names
+WEATHER_TABLE_NAME = os.environ.get("WEATHER_TABLE_NAME", "weather_documents")
+WEATHER_EMBEDDINGS_TABLE_NAME = os.environ.get("WEATHER_EMBEDDINGS_TABLE_NAME", "weather_embeddings")
 
-# Tickers to fetch news for by default (comma-separated), e.g. "AAPL,MSFT,GOOGL"
-DEFAULT_NEWS_TICKERS = [
-    t.strip().upper()
-    for t in os.environ.get("NEWS_TICKERS", "AAPL,MSFT,GOOGL,AMZN,TSLA").split(",")
-    if t.strip()
+# Default locations to fetch weather for
+DEFAULT_LOCATIONS = [
+    {"name": "San Francisco, CA", "lat": 37.7749, "lon": -122.4194},
+    {"name": "New York, NY", "lat": 40.7128, "lon": -74.0060},
+    {"name": "Chicago, IL", "lat": 41.8781, "lon": -87.6298},
+    {"name": "Austin, TX", "lat": 30.2672, "lon": -97.7431},
+    {"name": "Seattle, WA", "lat": 47.6062, "lon": -122.3321},
 ]
-
-# Basic stock ticker shape check: 1-10 uppercase letters, with an optional
-# ".X" or ".XX" share-class suffix (e.g. "BRK.B"). This rejects obviously
-# malformed input before we even call the Massive API.
-_TICKER_RE = re.compile(r"^[A-Z]{1,10}(\.[A-Z]{1,2})?$")
 
 # Lazy-load the sentence transformer model for vector search
 _embedding_model = None
@@ -69,78 +65,34 @@ def _get_embedding_model():
     return _embedding_model
 
 
-def ensure_table():
-    """Create the destination table in Lakebase if it doesn't exist yet."""
+def ensure_weather_table():
+    """Create the weather documents table in Lakebase if it doesn't exist yet."""
     lakebase.run_write(
         f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+        CREATE TABLE IF NOT EXISTS {WEATHER_TABLE_NAME} (
             id TEXT PRIMARY KEY,
-            payload JSONB NOT NULL,
-            synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        )
-        """
-    )
-
-
-def ensure_watchlist_table():
-    """Create the watchlist table in Lakebase if it doesn't exist yet."""
-    lakebase.run_write(
-        f"""
-        CREATE TABLE IF NOT EXISTS {WATCHLIST_TABLE_NAME} (
-            symbol TEXT NOT NULL,
-            email TEXT NOT NULL,
-            latest_price NUMERIC,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            PRIMARY KEY (symbol, email)
-        )
-        """
-    )
-
-
-def ensure_news_table():
-    """
-    Create the raw ticker-news documents table in Lakebase if it doesn't
-    exist yet. This is the RAW document store the Spark notebook
-    (notebooks/ingest_ticker_news_embeddings.py) reads from to compute
-    vector embeddings into a separate `<NEWS_TABLE_NAME>_embeddings` table.
-    """
-    lakebase.run_write(
-        f"""
-        CREATE TABLE IF NOT EXISTS {NEWS_TABLE_NAME} (
-            id TEXT PRIMARY KEY,
-            ticker TEXT NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT,
-            author TEXT,
-            article_url TEXT,
-            publisher_name TEXT,
-            keywords JSONB,
-            sentiment TEXT,
-            sentiment_reasoning TEXT,
-            published_utc TIMESTAMPTZ,
+            location TEXT NOT NULL,
+            latitude NUMERIC,
+            longitude NUMERIC,
+            source_type TEXT NOT NULL,
+            headline TEXT,
+            event TEXT,
+            narrative_text TEXT NOT NULL,
+            issued_at TIMESTAMPTZ,
+            effective_at TIMESTAMPTZ,
             payload JSONB NOT NULL,
             synced_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
         """
     )
     lakebase.run_write(
-        f"CREATE INDEX IF NOT EXISTS idx_{NEWS_TABLE_NAME}_ticker "
-        f"ON {NEWS_TABLE_NAME} (ticker)"
+        f"CREATE INDEX IF NOT EXISTS idx_{WEATHER_TABLE_NAME}_location "
+        f"ON {WEATHER_TABLE_NAME} (location)"
     )
-
-
-def _current_user_email() -> str:
-    """
-    Resolve the current user's email so the watchlist can be personalized.
-
-    Databricks Apps inject the logged-in user's identity via the
-    X-Forwarded-Email header on every request. Fall back to the Databricks
-    SDK's current_user API for local development where that header isn't set.
-    """
-    header_email = request.headers.get("X-Forwarded-Email")
-    if header_email:
-        return header_email
-    return _w.current_user.me().user_name
+    lakebase.run_write(
+        f"CREATE INDEX IF NOT EXISTS idx_{WEATHER_TABLE_NAME}_source_type "
+        f"ON {WEATHER_TABLE_NAME} (source_type)"
+    )
 
 
 @app.route("/healthz")
@@ -161,172 +113,147 @@ def handle_exception(err):
 
 @app.route("/")
 def index():
-    """Simple UI to submit a list of stock symbols to sync from Massive."""
+    """Weather intelligence dashboard with semantic search."""
     return render_template("index.html")
 
 
-@app.route("/records")
-def list_records():
-    """Read records already synced into Lakebase."""
+@app.route("/weather/documents")
+def list_weather_documents():
+    """List weather documents stored in Lakebase."""
     limit = int(request.args.get("limit", 100))
-    rows = lakebase.run_query(
-        f"SELECT id, payload, synced_at FROM {TABLE_NAME} ORDER BY synced_at DESC LIMIT %s",
-        (limit,),
-    )
+    location = request.args.get("location")
+    source_type = request.args.get("source_type")  # "forecast" or "alert"
+    
+    query = f"SELECT * FROM {WEATHER_TABLE_NAME} WHERE 1=1"
+    params = []
+    
+    if location:
+        query += " AND location ILIKE %s"
+        params.append(f"%{location}%")
+    
+    if source_type:
+        query += " AND source_type = %s"
+        params.append(source_type)
+    
+    query += " ORDER BY synced_at DESC LIMIT %s"
+    params.append(limit)
+    
+    rows = lakebase.run_query(query, tuple(params))
     return jsonify(rows)
 
 
-@app.route("/sync", methods=["POST"])
-def sync_from_massive():
+@app.route("/weather/sync", methods=["POST"])
+def sync_weather():
     """
-    Pull data from the Massive API (paginated, potentially huge dataset) and
-    upsert it into Lakebase in batches.
+    Fetch weather data (forecasts and alerts) from the National Weather Service
+    and store it in Lakebase.
+    
+    Body (optional JSON): {"locations": [{"name": "...", "lat": X, "lon": Y}], "limit": 50}
+    Defaults to DEFAULT_LOCATIONS when no locations are supplied.
     """
-    ensure_table()
-    client = MassiveClient()
-
-    path = request.json.get("path", "/records") if request.is_json else "/records"
-    batch_size = int(request.args.get("batch_size", 500))
-
-    batch = []
-    total = 0
-    for item in client.paginated_get(path):
-        batch.append(item)
-        if len(batch) >= batch_size:
-            total += _upsert_batch(batch)
-            batch = []
-
-    if batch:
-        total += _upsert_batch(batch)
-
-    return jsonify({"synced": total})
-
-
-@app.route("/news/sync", methods=["POST"])
-def sync_news_from_massive():
-    """
-    Pull recent news articles for a set of tickers from Massive (ONE API
-    call per ticker, via MassiveClient.get_news) and upsert them into the
-    ticker_news_documents table in Lakebase.
-
-    Body (optional JSON): {"tickers": ["AAPL", "MSFT"], "limit": 50}
-    Defaults to DEFAULT_NEWS_TICKERS when no tickers are supplied.
-    """
-    ensure_news_table()
-    client = MassiveClient()
-
+    ensure_weather_table()
+    client = WeatherClient()
+    
     body = request.json if request.is_json else {}
-    tickers = body.get("tickers") or DEFAULT_NEWS_TICKERS
-    tickers = [t.strip().upper() for t in tickers if isinstance(t, str) and t.strip()]
+    locations = body.get("locations") or DEFAULT_LOCATIONS
     limit = int(body.get("limit", 50))
-
-    total = 0
-    for ticker in tickers:
-        if not _TICKER_RE.match(ticker):
-            continue
-        articles = client.get_news(ticker, limit=limit)
-        total += _upsert_news_batch(ticker, articles)
-
-    return jsonify({"synced": total, "tickers": tickers})
-
-
-@app.route("/watchlist", methods=["GET"])
-def get_watchlist():
-    """Return the current user's watchlist symbols, with their last known price."""
-    ensure_watchlist_table()
-    email = _current_user_email()
-    rows = lakebase.run_query(
-        f"SELECT symbol, email, latest_price, updated_at FROM {WATCHLIST_TABLE_NAME} "
-        f"WHERE email = %s ORDER BY symbol ASC",
-        (email,),
-    )
-    return jsonify(rows)
+    
+    # Fetch weather documents
+    documents = client.fetch_weather_documents(locations, limit=limit)
+    
+    # Upsert into database
+    total = _upsert_weather_batch(documents)
+    
+    return jsonify({"synced": total, "locations": len(locations)})
 
 
-@app.route("/watchlist", methods=["POST"])
-def add_to_watchlist():
+@app.route("/weather/forecast", methods=["GET"])
+def get_forecast():
     """
-    Fetch the latest price for a single stock symbol from Massive using
-    exactly ONE API call (see MassiveClient.get_latest_price), then add/
-    update that symbol on the watchlist in Lakebase.
+    Get weather forecast for a specific location.
+    
+    Query params:
+    - lat: Latitude (required)
+    - lon: Longitude (required)
+    - hourly: Return hourly forecast instead of daily (optional, default false)
     """
-    ensure_watchlist_table()
-
-    if request.is_json:
-        symbol = request.json.get("symbol", "")
-    else:
-        symbol = request.form.get("symbol", "")
-
-    symbol = symbol.strip().upper() if isinstance(symbol, str) else ""
-
-    if not symbol or not _TICKER_RE.match(symbol):
-        return jsonify({"error": f"Invalid ticker symbol: {symbol!r}"}), 400
-
-    client = MassiveClient()
     try:
-        data = client.get_latest_price(symbol)  # <-- single API call, latest price only
-    except requests.HTTPError:
-        # Massive returns a 404/4xx for tickers it doesn't recognize.
-        return jsonify({"error": f"Unknown ticker symbol: {symbol}"}), 400
-
-    price = _extract_latest_price(data)
-    if price is None:
-        # No usable price in the response (e.g. delisted/invalid ticker
-        # that still 200s with an empty result set) - don't add it.
-        return jsonify({"error": f"No price data available for ticker: {symbol}"}), 400
-
-    email = _current_user_email()
-
-    lakebase.run_write(
-        f"""
-        INSERT INTO {WATCHLIST_TABLE_NAME} (symbol, email, latest_price, updated_at)
-        VALUES (%s, %s, %s, now())
-        ON CONFLICT (symbol, email) DO UPDATE
-            SET latest_price = EXCLUDED.latest_price,
-                updated_at = EXCLUDED.updated_at
-        """,
-        (symbol, email, price),
-    )
-
-    return jsonify({"symbol": symbol, "email": email, "latest_price": price})
-
-
-@app.route("/watchlist/<symbol>", methods=["DELETE"])
-def delete_from_watchlist(symbol: str):
-    """Remove a single symbol from the current user's watchlist."""
-    ensure_watchlist_table()
-
-    symbol = symbol.strip().upper() if isinstance(symbol, str) else ""
-    if not symbol or not _TICKER_RE.match(symbol):
-        return jsonify({"error": f"Invalid ticker symbol: {symbol!r}"}), 400
-
-    email = _current_user_email()
-    deleted = lakebase.run_write(
-        f"DELETE FROM {WATCHLIST_TABLE_NAME} WHERE symbol = %s AND email = %s",
-        (symbol, email),
-    )
-
-    if not deleted:
-        return jsonify({"error": f"{symbol} is not on your watchlist"}), 404
-
-    return jsonify({"symbol": symbol, "email": email, "deleted": True})
+        lat = float(request.args.get("lat"))
+        lon = float(request.args.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Valid lat and lon parameters are required"}), 400
+    
+    hourly = request.args.get("hourly", "").lower() == "true"
+    
+    client = WeatherClient()
+    
+    try:
+        # Resolve grid point
+        grid = client.get_grid_point(lat, lon)
+        grid_id = grid.get("gridId")
+        grid_x = grid.get("gridX")
+        grid_y = grid.get("gridY")
+        
+        if not all([grid_id, grid_x, grid_y]):
+            return jsonify({"error": "Could not resolve grid coordinates for location"}), 400
+        
+        # Fetch forecast
+        if hourly:
+            periods = client.get_hourly_forecast(grid_id, grid_x, grid_y)
+        else:
+            periods = client.get_forecast(grid_id, grid_x, grid_y)
+        
+        return jsonify({
+            "lat": lat,
+            "lon": lon,
+            "grid_id": grid_id,
+            "grid_x": grid_x,
+            "grid_y": grid_y,
+            "forecast_type": "hourly" if hourly else "daily",
+            "periods": periods
+        })
+    
+    except requests.HTTPError as e:
+        logger.exception("Failed to fetch forecast")
+        return jsonify({"error": f"Weather service error: {str(e)}"}), 500
 
 
-@app.route("/news/search", methods=["GET", "POST"])
-def search_news_by_vector():
+@app.route("/weather/alerts", methods=["GET"])
+def get_alerts():
     """
-    Perform semantic vector similarity search on news articles and content chunks.
+    Get active weather alerts.
+    
+    Query params:
+    - state: Two-letter state code (optional, e.g. "TX", "CA")
+    """
+    state = request.args.get("state")
+    
+    client = WeatherClient()
+    
+    try:
+        alerts = client.get_active_alerts(state=state)
+        return jsonify({
+            "state": state,
+            "alert_count": len(alerts),
+            "alerts": alerts
+        })
+    
+    except requests.HTTPError as e:
+        logger.exception("Failed to fetch alerts")
+        return jsonify({"error": f"Weather service error: {str(e)}"}), 500
+
+
+@app.route("/weather/search", methods=["GET", "POST"])
+def search_weather_by_vector():
+    """
+    Perform semantic vector similarity search on weather documents.
     
     Accepts either GET with query params or POST with JSON body:
     - query: Natural language search query (required)
-    - limit: Number of results to return per type (default: 10, max: 50)
+    - limit: Number of results to return (default: 10, max: 50)
     
-    Returns the top N most relevant:
-    1. Documents (title + description embeddings)
-    2. Chunks (article content chunk embeddings)
-    
-    Example GET: /news/search?query=earnings report&limit=10
-    Example POST: {"query": "product launch announcements", "limit": 20}
+    Example GET: /weather/search?query=severe thunderstorm warning&limit=10
+    Example POST: {"query": "sunny and warm forecast", "limit": 20}
     """
     # Parse request parameters
     if request.method == "POST" and request.is_json:
@@ -353,50 +280,25 @@ def search_news_by_vector():
         # Format embedding as Postgres array literal for pgvector
         embedding_str = "[" + ",".join(str(float(x)) for x in query_embedding) + "]"
         
-        # Query document embeddings (title + description) with full details
+        # Query weather document embeddings
         documents = lakebase.run_query(
             f"""
             SELECT 
-                e.id,
-                e.ticker,
-                e.title,
-                e.published_utc,
+                w.id,
+                w.location,
+                w.source_type,
+                w.headline,
+                w.event,
                 e.model_name,
                 e.embedding <=> %s::vector AS distance,
-                'document' AS result_type,
-                n.description,
-                n.article_url,
-                n.author,
-                n.publisher_name,
-                n.sentiment,
-                n.keywords
-            FROM {EMBEDDINGS_TABLE_NAME} e
-            LEFT JOIN {NEWS_TABLE_NAME} n ON e.id = n.id
+                w.narrative_text,
+                w.issued_at,
+                w.effective_at,
+                w.latitude,
+                w.longitude
+            FROM {WEATHER_EMBEDDINGS_TABLE_NAME} e
+            LEFT JOIN {WEATHER_TABLE_NAME} w ON e.document_id = w.id
             ORDER BY e.embedding <=> %s::vector
-            LIMIT %s
-            """,
-            (embedding_str, embedding_str, limit),
-        )
-        
-        # Query chunk embeddings (full article content chunks) with article details
-        chunks = lakebase.run_query(
-            f"""
-            SELECT 
-                c.article_id,
-                c.ticker,
-                c.chunk_index,
-                c.chunk_text,
-                c.model_name,
-                c.embedding <=> %s::vector AS distance,
-                'chunk' AS result_type,
-                n.title,
-                n.article_url,
-                n.published_utc,
-                n.author,
-                n.publisher_name
-            FROM {CHUNK_EMBEDDINGS_TABLE_NAME} c
-            LEFT JOIN {NEWS_TABLE_NAME} n ON c.article_id = n.id
-            ORDER BY c.embedding <=> %s::vector
             LIMIT %s
             """,
             (embedding_str, embedding_str, limit),
@@ -405,9 +307,7 @@ def search_news_by_vector():
         return jsonify({
             "query": query,
             "documents": documents,
-            "chunks": chunks,
-            "document_count": len(documents),
-            "chunk_count": len(chunks)
+            "document_count": len(documents)
         })
         
     except ImportError:
@@ -419,119 +319,45 @@ def search_news_by_vector():
         return jsonify({"error": str(e)}), 500
 
 
-def _extract_latest_price(data: dict) -> float | None:
-    """Pull the trade price out of the Massive 'previous close' response shape.
-
-    The /v2/aggs/ticker/{symbol}/prev endpoint returns "results" as a LIST
-    containing a single aggregate bar (not a dict), e.g.:
-        {"status": "OK", "resultsCount": 1, "results": [{"c": 148.845, ...}]}
-    Previously this code treated "results" as a dict, so isinstance(results, dict)
-    was always False for this endpoint's real shape and the price silently
-    resolved to None. Unwrap the list here, and check "status"/"resultsCount"
-    so invalid tickers (empty results) are detected instead of "succeeding"
-    with a null price.
-
-    Adjust the key lookup here if the real Massive API returns a different
-    field name for the traded/close price.
-    """
-    if not isinstance(data, dict):
-        return None
-    if data.get("status") not in (None, "OK") or data.get("resultsCount") == 0:
-        return None
-    results = data.get("results", data)
-    if isinstance(results, list):
-        results = results[0] if results else None
-    if isinstance(results, dict):
-        for key in ("c", "p", "price", "last_price", "vw"):
-            if key in results:
-                return results[key]
-    return None
-
-
-def _upsert_batch(items: list[dict]) -> int:
-    """Upsert a batch of Massive API items into Lakebase, one statement per row.
-
-    For very large batches, consider psycopg2.extras.execute_values for
-    higher throughput instead of per-row execute calls.
-    """
-    import json as _json
-
+def _upsert_weather_batch(documents: list[dict]) -> int:
+    """Upsert a batch of weather documents into Lakebase."""
     count = 0
     with lakebase.get_connection() as conn:
         with conn.cursor() as cur:
-            for item in items:
+            for doc in documents:
                 cur.execute(
                     f"""
-                    INSERT INTO {TABLE_NAME} (id, payload, synced_at)
-                    VALUES (%s, %s, now())
-                    ON CONFLICT (id) DO UPDATE
-                        SET payload = EXCLUDED.payload,
-                            synced_at = EXCLUDED.synced_at
-                    """,
-                    (str(item.get("id")), _json.dumps(item)),
-                )
-                count += 1
-            conn.commit()
-    return count
-
-
-def _upsert_news_batch(ticker: str, articles: list[dict]) -> int:
-    """Upsert news articles for a single ticker into the news documents table.
-
-    Flattens the top-level "insights" sentiment entry that matches this
-    ticker (if present) into its own columns so the Spark notebook can read
-    plain text columns instead of parsing JSONB for the common case.
-    """
-    import json as _json
-
-    count = 0
-    with lakebase.get_connection() as conn:
-        with conn.cursor() as cur:
-            for article in articles:
-                sentiment = None
-                sentiment_reasoning = None
-                for insight in article.get("insights", []) or []:
-                    if insight.get("ticker") == ticker:
-                        sentiment = insight.get("sentiment")
-                        sentiment_reasoning = insight.get("sentiment_reasoning")
-                        break
-
-                publisher = article.get("publisher") or {}
-                cur.execute(
-                    f"""
-                    INSERT INTO {NEWS_TABLE_NAME} (
-                        id, ticker, title, description, author, article_url,
-                        publisher_name, keywords, sentiment, sentiment_reasoning,
-                        published_utc, payload, synced_at
+                    INSERT INTO {WEATHER_TABLE_NAME} (
+                        id, location, latitude, longitude, source_type,
+                        headline, event, narrative_text, issued_at, effective_at,
+                        payload, synced_at
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                     ON CONFLICT (id) DO UPDATE
-                        SET ticker = EXCLUDED.ticker,
-                            title = EXCLUDED.title,
-                            description = EXCLUDED.description,
-                            author = EXCLUDED.author,
-                            article_url = EXCLUDED.article_url,
-                            publisher_name = EXCLUDED.publisher_name,
-                            keywords = EXCLUDED.keywords,
-                            sentiment = EXCLUDED.sentiment,
-                            sentiment_reasoning = EXCLUDED.sentiment_reasoning,
-                            published_utc = EXCLUDED.published_utc,
+                        SET location = EXCLUDED.location,
+                            latitude = EXCLUDED.latitude,
+                            longitude = EXCLUDED.longitude,
+                            source_type = EXCLUDED.source_type,
+                            headline = EXCLUDED.headline,
+                            event = EXCLUDED.event,
+                            narrative_text = EXCLUDED.narrative_text,
+                            issued_at = EXCLUDED.issued_at,
+                            effective_at = EXCLUDED.effective_at,
                             payload = EXCLUDED.payload,
                             synced_at = EXCLUDED.synced_at
                     """,
                     (
-                        str(article.get("id")),
-                        ticker,
-                        article.get("title", ""),
-                        article.get("description"),
-                        article.get("author"),
-                        article.get("article_url"),
-                        publisher.get("name"),
-                        _json.dumps(article.get("keywords", [])),
-                        sentiment,
-                        sentiment_reasoning,
-                        article.get("published_utc"),
-                        _json.dumps(article),
+                        doc.get("id"),
+                        doc.get("location"),
+                        doc.get("latitude"),
+                        doc.get("longitude"),
+                        doc.get("source_type"),
+                        doc.get("headline"),
+                        doc.get("event"),
+                        doc.get("narrative_text"),
+                        doc.get("issued_at"),
+                        doc.get("effective_at"),
+                        _json.dumps(doc.get("payload", {})),
                     ),
                 )
                 count += 1
